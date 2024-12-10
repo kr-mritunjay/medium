@@ -39,4 +39,34 @@ app.post("/api/v1/signup", async (c) => {
   }
 });
 
+// singin part
+
+app.post("/api/v1/signin", async (c) => {
+  try {
+    const prisma = new PrismaClient({
+      datasourceUrl: c.env.DATABASE_URL,
+    }).$extends(withAccelerate());
+
+    const body = await c.req.json();
+    const user = await prisma.user.findUnique({
+      where: {
+        email: body.email,
+      },
+    });
+
+    if (!user) {
+      c.status(403);
+      return c.json({ error: "user not found" });
+    }
+
+    const token = await sign({ id: user.id }, c.env.JWT_TOKEN);
+    return c.json({
+      jwt: token,
+    });
+  } catch (error) {
+    console.error("Error occurred:", error);
+    return c.json({ error: "Internal Server Error" }, 500);
+  }
+});
+
 export default app;
