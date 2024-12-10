@@ -1,9 +1,10 @@
 import { Hono } from "hono";
 import { PrismaClient } from "@prisma/client/edge";
 import { withAccelerate } from "@prisma/extension-accelerate";
-import { sign, verify } from "hono/jwt";
+import { sign } from "hono/jwt";
 
-const userRoutes = new Hono<{
+// creating object as well as the binding
+export const userRoutes = new Hono<{
   Bindings: {
     // here i can give the types i want to give
     DATABASE_URL: string;
@@ -11,6 +12,7 @@ const userRoutes = new Hono<{
   };
 }>();
 
+// signup part
 userRoutes.post("/signup", async (c) => {
   try {
     const prisma = new PrismaClient({
@@ -67,4 +69,4 @@ userRoutes.post("/signin", async (c) => {
   }
 });
 
-export default userRoutes;
+// export default userRoutes;
