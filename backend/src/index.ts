@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { PrismaClient } from "@prisma/client/edge";
 import { withAccelerate } from "@prisma/extension-accelerate";
-import { sign } from "hono/jwt";
+import { sign, verify } from "hono/jwt";
 // import {}
 
 const app = new Hono<{
@@ -11,6 +11,20 @@ const app = new Hono<{
     JWT_TOKEN: string; // this is done to insure that databaseurl is string
   };
 }>();
+
+app.use("/api/v1/blog/*", async (c, next) => {
+  try {
+    const header = c.req.header("Authorization") || "";
+
+    const response = await verify(header, c.env.JWT_TOKEN);
+    await next();
+  } catch (error) {
+    console.log("Error :", error);
+    return c.json({
+      error: "Unauthorized",
+    });
+  }
+});
 
 // sing up part
 
@@ -67,6 +81,16 @@ app.post("/api/v1/signin", async (c) => {
     console.error("Error occurred:", error);
     return c.json({ error: "Internal Server Error" }, 500);
   }
+});
+
+app.post("/api/v1/blog", (c) => {
+  return c.text("Hello Hono!");
+});
+app.put("/api/v1/blog", (c) => {
+  return c.text("Hello Hono!");
+});
+app.get("/api/v1/blog/:id", (c) => {
+  return c.text("Hello Hono!");
 });
 
 export default app;
