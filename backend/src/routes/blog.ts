@@ -5,70 +5,94 @@ import { sign, verify } from "hono/jwt";
 
 export const blogRoutes = new Hono<{
   Bindings: {
-    // here i can give the types i want to give
     DATABASE_URL: string;
-    JWT_TOKEN: string; // this is done to insure that databaseurl is string
+    JWT_TOKEN: string;
+  };
+  Variables: {
+    UserId: string;
   };
 }>();
 
-// using middleware to authorize the routes
-
-blogRoutes.use("/*", async (c, next) => {
+// Authorization Middleware
+blogRoutes.use("/", async (c, next) => {
   try {
-    const header = c.req.header("Authorization") || "";
+    const header = c.req.header("Authorization");
+
+    if (!header) {
+      c.status(401);
+      return c.json({ error: "No authorization token provided" });
+    }
 
     const response = await verify(header, c.env.JWT_TOKEN);
+    c.set("UserId", response.id);
     await next();
   } catch (error) {
-    console.log("Error :", error);
+    c.status(403);
     return c.json({
-      error: "Unauthorized",
+      error: "Invalid or expired token",
+      details: error instanceof Error ? error.message : "Unknown error",
     });
   }
 });
 
-// posting post
-
+// Create Post
 blogRoutes.post("/", async (c) => {
   try {
     const body = await c.req.json();
+    const authId = c.get("UserId");
+
+    // Validate input
+    if (!body.title || !body.content) {
+      c.status(400);
+      return c.json({ error: "Title and content are required" });
+    }
 
     const prisma = new PrismaClient({
       datasourceUrl: c.env.DATABASE_URL,
     }).$extends(withAccelerate());
 
-    await prisma.post.create({
+    const post = await prisma.post.create({
       data: {
         title: body.title,
         content: body.content,
-        authorId: "1",
+        authorId: authId,
       },
     });
 
     return c.json({
-      msg: "post was sucessfull",
+      msg: "Post created successfully",
+      postId: post.id,
     });
   } catch (error) {
-    console.log("Error : ", error);
-    c.json({
-      error: "Coudn't post try again.....",
+    console.error("Error creating post:", error);
+    c.status(500);
+    return c.json({
+      error: "Couldn't create post",
+      details: error instanceof Error ? error.message : "Unknown error",
     });
   }
 });
 
-// updating post
-
+// Update Post
 blogRoutes.put("/", async (c) => {
   try {
     const body = await c.req.json();
+    const authId = c.get("UserId");
+
+    // Validate input
+    if (!body.id || !body.title || !body.content) {
+      c.status(400);
+      return c.json({ error: "Post ID, title, and content are required" });
+    }
 
     const prisma = new PrismaClient({
       datasourceUrl: c.env.DATABASE_URL,
     }).$extends(withAccelerate());
 
-    await prisma.post.update({
+    const updatedPost = await prisma.post.update({
       where: {
         id: body.id,
+        authorId: authId, // Ensure user can only update their own posts
       },
       data: {
         title: body.title,
@@ -77,58 +101,93 @@ blogRoutes.put("/", async (c) => {
     });
 
     return c.json({
-      msg: "post updated sucessfully",
+      msg: "Post updated successfully",
+      post: updatedPost,
     });
   } catch (error) {
-    console.log("Error : ", error);
-    c.json({
-      error: "Coudn't update post try again.....",
+    console.error("Error updating post:", error);
+    c.status(500);
+    return c.json({
+      error: "Couldn't update post",
+      details: error instanceof Error ? error.message : "Unknown error",
     });
   }
 });
 
-// fetching post
-
-blogRoutes.get("/", async (c) => {
+// get all post of the user
+blogRoutes.get("/all", async (c) => {
   try {
-    const body = await c.req.json();
-
     const prisma = new PrismaClient({
       datasourceUrl: c.env.DATABASE_URL,
     }).$extends(withAccelerate());
 
-    const blog = await prisma.post.findFirst({
-      where: {
-        id: body.id,
+    const page = Number(c.req.query("page")) || 1;
+    const limit = Number(c.req.query("limit")) || 10;
+    const skip = (page - 1) * limit;
+
+    const blogs = await prisma.post.findMany({
+      take: limit,
+      skip: skip,
+      select: {
+        id: true,
+        title: true,
+        // Add more fields as needed
+      },
+      orderBy: {
+        // Add an ordering field if you have one, like createdAt
+        // createdAt: 'desc'
       },
     });
 
+    const totalCount = await prisma.post.count();
+
     return c.json({
-      blog,
+      blogs,
+      count: blogs.length,
+      totalCount,
+      page,
+      totalPages: Math.ceil(totalCount / limit),
     });
   } catch (error) {
-    console.log("Error : ", error);
-    c.json({
-      error: "Coudn't fetch the post try again.....",
-    });
+    console.error("Error fetching posts:", error);
+    return c.json(
+      {
+        error: "Couldn't load the content",
+        details: error instanceof Error ? error.message : "Unknown error",
+      },
+      500
+    );
   }
 });
 
-blogRoutes.get("/bulk", async (c) => {
+// Get Single Post
+
+blogRoutes.get("/:id", async (c) => {
   try {
-    const body = await c.req.json();
+    const postId = c.req.param("id");
 
     const prisma = new PrismaClient({
       datasourceUrl: c.env.DATABASE_URL,
     }).$extends(withAccelerate());
 
-    const blogs = await prisma.post.findMany();
+    const blog = await prisma.post.findUnique({
+      where: {
+        id: postId,
+      },
+    });
 
-    console.log(blogs);
+    if (!blog) {
+      c.status(404);
+      return c.json({ error: "Post not found" });
+    }
+
+    return c.json({ blog });
   } catch (error) {
-    console.log(error);
+    console.error("Error fetching post:", error);
+    c.status(500);
     return c.json({
-      error: "Coudn't load the content....",
+      error: "Couldn't fetch the post",
+      details: error instanceof Error ? error.message : "Unknown error",
     });
   }
 });
