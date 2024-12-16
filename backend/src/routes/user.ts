@@ -2,8 +2,7 @@ import { Hono } from "hono";
 import { PrismaClient } from "@prisma/client/edge";
 import { withAccelerate } from "@prisma/extension-accelerate";
 import { sign } from "hono/jwt";
-import { signupInput } from "@mritunjaykr160/medium-common";
-import z from "zod";
+import { signupInput, signinInput } from "@mritunjaykr160/medium-common";
 
 // creating object as well as the binding
 export const userRoutes = new Hono<{
@@ -61,6 +60,16 @@ userRoutes.post("/signin", async (c) => {
     }).$extends(withAccelerate());
 
     const body = await c.req.json();
+
+    const { success } = signinInput.safeParse(body);
+    console.log(success);
+    // console.log(result);
+    if (!success) {
+      c.status(411);
+      return c.json({
+        msg: "wrong input",
+      });
+    }
     const user = await prisma.user.findUnique({
       where: {
         email: body.email,

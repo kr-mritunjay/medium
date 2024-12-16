@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { PrismaClient } from "@prisma/client/edge";
 import { withAccelerate } from "@prisma/extension-accelerate";
 import { sign, verify } from "hono/jwt";
+import { createBlog, updateBlog } from "@mritunjaykr160/medium-common";
 
 export const blogRoutes = new Hono<{
   Bindings: {
@@ -39,6 +40,16 @@ blogRoutes.use("/", async (c, next) => {
 blogRoutes.post("/", async (c) => {
   try {
     const body = await c.req.json();
+    const { success } = createBlog.safeParse(body);
+    console.log(success);
+    // console.log(result);
+    if (!success) {
+      c.status(411);
+      return c.json({
+        msg: "wrong input",
+      });
+    }
+
     const authId = c.get("UserId");
 
     // Validate input
@@ -77,8 +88,17 @@ blogRoutes.post("/", async (c) => {
 blogRoutes.put("/", async (c) => {
   try {
     const body = await c.req.json();
-    const authId = c.get("UserId");
 
+    const authId = c.get("UserId");
+    const { success } = updateBlog.safeParse(body);
+    console.log(success);
+    // console.log(result);
+    if (!success) {
+      c.status(411);
+      return c.json({
+        msg: "wrong input",
+      });
+    }
     // Validate input
     if (!body.id || !body.title || !body.content) {
       c.status(400);
