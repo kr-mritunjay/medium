@@ -3,6 +3,7 @@ import { PrismaClient } from "@prisma/client/edge";
 import { withAccelerate } from "@prisma/extension-accelerate";
 import { sign } from "hono/jwt";
 import { signupInput, signinInput } from "@mritunjaykr160/medium-common";
+import { cors } from "hono/cors";
 
 // creating object as well as the binding
 export const userRoutes = new Hono<{
@@ -12,6 +13,14 @@ export const userRoutes = new Hono<{
     JWT_TOKEN: string; // this is done to insure that databaseurl is string
   };
 }>();
+
+userRoutes.use(
+  "*",
+  cors({
+    origin: "http://localhost:5173",
+    allowMethods: ["GET", "POST", "OPTIONS"],
+  })
+);
 
 // signup part
 userRoutes.post("/signup", async (c) => {
@@ -43,7 +52,7 @@ userRoutes.post("/signup", async (c) => {
     const token = await sign({ id: user.id }, c.env.JWT_TOKEN);
 
     return c.json({
-      jwt: token,
+      token,
     });
   } catch (error) {
     console.error("Error occurred:", error);
@@ -83,7 +92,7 @@ userRoutes.post("/signin", async (c) => {
 
     const token = await sign({ id: user.id }, c.env.JWT_TOKEN);
     return c.json({
-      jwt: token,
+      token,
     });
   } catch (error) {
     console.error("Error occurred:", error);
